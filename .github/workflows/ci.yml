@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run check
+      - run: bun run test
+      # dist/ is committed so git installs need no build step; it must match the source.
+      - name: dist is up to date
+        run: bun run check:dist
+      - name: CLI runs under plain Node
+        run: node bin/rn-build-cache.js --help
