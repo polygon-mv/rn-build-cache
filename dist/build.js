@@ -148,9 +148,9 @@ export async function runBuild(config, options, reporter) {
         variant,
         env,
         reporter,
+        outPath,
     });
     const buildSeconds = Math.round((Date.now() - buildStart) / 1000);
-    await copyFile(built.apkPath, outPath);
     const meta = {
         schema: META_SCHEMA,
         key,

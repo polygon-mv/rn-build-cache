@@ -195,9 +195,9 @@ export async function runBuild(
     variant,
     env,
     reporter,
+    outPath,
   });
   const buildSeconds = Math.round((Date.now() - buildStart) / 1000);
-  await copyFile(built.apkPath, outPath);
 
   const meta: CacheMeta = {
     schema: META_SCHEMA,
