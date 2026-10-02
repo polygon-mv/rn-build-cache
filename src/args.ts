@@ -15,6 +15,11 @@ export interface CliOptions {
    * without running Gradle, so CI can prepare the runner for a full build only when it needs one.
    */
   readonly cacheOnly: boolean;
+  /**
+   * Only report whether the cache has this variant's key (exit 0 either way): fingerprint and a
+   * listing of the release, no download, no bundling, no Gradle.
+   */
+  readonly check: boolean;
   /** Run every prepare step, including ones whose `unlessExists` output is present. */
   readonly prepare: boolean;
   readonly install: boolean;
@@ -36,6 +41,8 @@ Run without --variant in a terminal for the interactive UI.
   --no-remote            use only the local cache, never the GitHub release
   --upload / --no-upload share a fresh build on the GitHub release (default: on in CI only)
   --cache-only           build from the cache or do nothing (exit 0, hit=false); never Gradle
+  --check                only report whether the cache has this build (exit 0, cached=true|false);
+                         downloads and builds nothing
   --prepare              run every prepare step, even ones whose output already exists
   --config <path>        config file (default: nearest rn-build-cache.config.* upwards)
   --explain              print what the cache key is made of
@@ -51,6 +58,7 @@ export function parseArgs(
   let remote = true;
   let upload = env.CI === "true";
   let cacheOnly = false;
+  let check = false;
   let prepare = false;
   let install = false;
   let device: string | null = null;
@@ -93,6 +101,9 @@ export function parseArgs(
       case "--cache-only":
         cacheOnly = true;
         break;
+      case "--check":
+        check = true;
+        break;
       case "--prepare":
         prepare = true;
         break;
@@ -118,6 +129,8 @@ export function parseArgs(
     }
   }
   if (cacheOnly && !cache) return { error: "--cache-only and --no-cache contradict each other" };
+  if (check && !cache) return { error: "--check and --no-cache contradict each other" };
+  if (check && !variant) return { error: "--check needs --variant" };
   return {
     variant,
     config,
@@ -125,6 +138,7 @@ export function parseArgs(
     remote,
     upload,
     cacheOnly,
+    check,
     prepare,
     install,
     device,

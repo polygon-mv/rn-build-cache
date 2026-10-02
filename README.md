@@ -19,8 +19,8 @@ Expo prebuild projects are the main target. Bare React Native works for the case
 From GitHub; there is no npm release yet. Pin a tag:
 
 ```bash
-bun add -d github:polygon-mv/rn-build-cache#v0.1.0
-npm i -D github:polygon-mv/rn-build-cache#v0.1.0
+bun add -d github:polygon-mv/rn-build-cache#v0.2.0
+npm i -D github:polygon-mv/rn-build-cache#v0.2.0
 ```
 
 This provides the `rn-build-cache` binary, which runs on Node ≥ 20 or Bun. `dist/` is committed,
@@ -53,6 +53,7 @@ export default {
       envFile: ".env.staging", // fills in missing keys; relative to appDir
       envDefaults: { EXPO_PUBLIC_API_URL: "https://staging.example.com" },
       gradleArgs: ["--no-daemon", "--max-workers=2", "-x", "lintVitalRelease"],
+      // resetMetroCache: false,           // reuse Metro's transform cache in a swap (see below)
       prepare: [
         // run from the config's directory before JS is bundled; skipped when the path exists
         { run: ["bun", "run", "build:i18n"], unlessExists: "packages/i18n/dist/index.js" },
@@ -89,17 +90,18 @@ full output of the run goes to `~/.cache/rn-build-cache/last-build.log`.
 The UI appears only when stdin and stdout are terminals, `CI` is not set, and no `--variant` was
 given. `--plain` forces plain output.
 
-| flag                       | effect                                                                       |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `--variant <name>`         | a variant from the config; also selects plain output                         |
-| `--install [--device id]`  | `adb install -r` the result                                                  |
-| `--out <path>`             | APK destination (default `android/app/build/outputs/rn-build-cache/<v>.apk`) |
-| `--no-cache`               | skip the lookup; the build still refreshes the cache                         |
-| `--no-remote`              | local cache only                                                             |
-| `--upload` / `--no-upload` | share a fresh build on the release (default: CI only)                        |
-| `--cache-only`             | build from the cache or do nothing (exit 0, `hit=false`); never runs Gradle  |
-| `--prepare`                | run every prepare step, even ones whose output exists                        |
-| `--explain`                | print what the cache key is made of                                          |
+| flag                       | effect                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `--variant <name>`         | a variant from the config; also selects plain output                            |
+| `--install [--device id]`  | `adb install -r` the result                                                     |
+| `--out <path>`             | APK destination (default `android/app/build/outputs/rn-build-cache/<v>.apk`)    |
+| `--no-cache`               | skip the lookup; the build still refreshes the cache                            |
+| `--no-remote`              | local cache only                                                                |
+| `--upload` / `--no-upload` | share a fresh build on the release (default: CI only)                           |
+| `--cache-only`             | build from the cache or do nothing (exit 0, `hit=false`); never runs Gradle     |
+| `--check`                  | only report whether the cache has this build (`cached=true/false`); no download |
+| `--prepare`                | run every prepare step, even ones whose output exists                           |
+| `--explain`                | print what the cache key is made of                                             |
 
 ## Use it in GitHub Actions
 
@@ -134,6 +136,30 @@ jobs:
 Step outputs: `hit` (`true`/`false`), `cache` (`hit`, `swap`, `miss` or `none`), `key`, `apk`.
 A summary line is appended to the job summary. In CI (`CI=true`) fresh builds are uploaded by
 default.
+
+### Deciding whether a build is needed: `--check`
+
+`--check` fingerprints the variant and lists the cache release, nothing more: no APK download, no
+bundling, no Gradle. It needs `node_modules` (the app config and its plugins are evaluated) but
+not the Android SDK, so it fits a cheap push-triggered job that opens an issue or posts a status
+instead of building. It always exits 0. Step outputs:
+
+| output          | value                                                                      |
+| --------------- | -------------------------------------------------------------------------- |
+| `cached`        | `true` when an entry for this key exists (locally or on the release)       |
+| `key`           | the cache key, `<variant>-<24 hex>`                                        |
+| `fingerprint`   | the Expo fingerprint hash                                                  |
+| `newest-key`    | the newest entry of this variant on the release (empty when there is none) |
+| `newest-commit` | the commit that entry's native side was built from                         |
+| `changes`       | on a miss, the fingerprint sources that moved since that entry             |
+
+### Faster swaps: a persisted Metro cache
+
+Bundling is most of a swap, and it runs with `--reset-cache` by default, the way the React Native
+Gradle plugin bundles. Set `resetMetroCache: false` on a variant to reuse Metro's transform cache
+(`$TMPDIR/metro-cache`, `/tmp/metro-cache` on a Linux runner) and persist that directory with
+`actions/cache`. Metro's cache key does not cover every env value a Babel plugin inlines (Expo's
+`EXPO_PUBLIC_*`), so put those values in the Actions cache key.
 
 ## How it works
 

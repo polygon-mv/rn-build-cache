@@ -51,45 +51,15 @@ export async function runBuild(
 ): Promise<BuildResult> {
   const startedAt = Date.now();
   const { variant } = options;
+  const { env, toolchain, key, fingerprint } = await fingerprintVariant(
+    config,
+    variant,
+    options.explain,
+    reporter,
+  );
   const appDir = config.appDir;
 
-  const env = buildEnv(config, variant);
-  // The fingerprint evaluates the app config in-process, so it must see the build's env too.
-  Object.assign(process.env, env);
-  const toolchain = resolveToolchain(appDir);
-
-  const { key, fingerprint } = await phase(
-    reporter,
-    "fingerprint",
-    "Fingerprint native inputs",
-    async () => {
-      const fp = await nativeFingerprint(appDir);
-      const inputs: KeyInputs = {
-        fingerprint: fp.hash,
-        variant: variant.name,
-        abi: config.abi,
-        hermesCompiler: toolchain.hermesCompiler,
-        reactNative: toolchain.reactNative,
-        extras: config.keyExtras,
-      };
-      if (options.explain) log(`key material:\n${keyMaterial(inputs)}`);
-      return { key: cacheKey(inputs), fingerprint: fp };
-    },
-    (value) => value.key,
-  );
-
-  const cacheDir = config.local.dir ?? defaultCacheDir();
-  const local = createLocalStore(cacheDir);
-  const workDir = join(cacheDir, ".work", String(process.pid));
-  const remote: GithubStore | null =
-    options.remote && config.remote.enabled && onPath("gh")
-      ? createGithubStore({
-          cwd: config.root,
-          workDir,
-          tag: config.remote.tag,
-          repo: config.remote.repo,
-        })
-      : null;
+  const { local, workDir, remote } = stores(config, options.remote);
 
   // Lookup: this machine first, then the shared remote (a remote hit is copied into the local
   // store). A remote that is down or unauthenticated is a note, never a failure.
@@ -149,6 +119,7 @@ export async function runBuild(
       outPath,
       env,
       signing: config.signing,
+      resetMetroCache: variant.resetMetroCache,
       reporter,
     });
     if (swap.ok) outcome = "swap";
@@ -251,6 +222,121 @@ export async function runBuild(
   });
 }
 
+/** The env, toolchain and cache key of a variant: what every lookup starts from. */
+async function fingerprintVariant(
+  config: ResolvedConfig,
+  variant: ResolvedVariant,
+  explain: boolean,
+  reporter: Reporter,
+) {
+  const env = buildEnv(config, variant);
+  // The fingerprint evaluates the app config in-process, so it must see the build's env too.
+  Object.assign(process.env, env);
+  const toolchain = resolveToolchain(config.appDir);
+  const { key, fingerprint } = await phase(
+    reporter,
+    "fingerprint",
+    "Fingerprint native inputs",
+    async () => {
+      const fp = await nativeFingerprint(config.appDir);
+      const inputs: KeyInputs = {
+        fingerprint: fp.hash,
+        variant: variant.name,
+        abi: config.abi,
+        hermesCompiler: toolchain.hermesCompiler,
+        reactNative: toolchain.reactNative,
+        extras: config.keyExtras,
+      };
+      if (explain) log(`key material:\n${keyMaterial(inputs)}`);
+      return { key: cacheKey(inputs), fingerprint: fp };
+    },
+    (value) => value.key,
+  );
+  return { env, toolchain, key, fingerprint };
+}
+
+function stores(config: ResolvedConfig, useRemote: boolean) {
+  const cacheDir = config.local.dir ?? defaultCacheDir();
+  const local = createLocalStore(cacheDir);
+  const workDir = join(cacheDir, ".work", String(process.pid));
+  const remote: GithubStore | null =
+    useRemote && config.remote.enabled && onPath("gh")
+      ? createGithubStore({
+          cwd: config.root,
+          workDir,
+          tag: config.remote.tag,
+          repo: config.remote.repo,
+        })
+      : null;
+  return { local, workDir, remote };
+}
+
+export interface CheckResult {
+  readonly key: string;
+  readonly fingerprint: string;
+  /** Whether an entry for the key exists: `local`, `remote`, or null. Nothing is downloaded. */
+  readonly cachedIn: "local" | "remote" | null;
+  /** The newest shared entry of this variant, when the remote is reachable and has one. */
+  readonly newest: {
+    readonly key: string;
+    readonly commit: string;
+    readonly builtAt: string;
+  } | null;
+  /** On a miss: which fingerprint sources moved since the newest shared entry. */
+  readonly changes: string | null;
+  readonly elapsedMs: number;
+}
+
+/**
+ * `--check`: would a build of this variant need Gradle? Fingerprints, then asks the local store
+ * and the release whether the key exists, without downloading an APK, bundling or building.
+ * Cheap enough for a push-triggered job that only decides whether a native build is needed.
+ */
+export async function runCheck(
+  config: ResolvedConfig,
+  variant: ResolvedVariant,
+  options: { readonly remote: boolean; readonly explain: boolean },
+  reporter: Reporter,
+): Promise<CheckResult> {
+  const startedAt = Date.now();
+  const { key, fingerprint } = await fingerprintVariant(config, variant, options.explain, reporter);
+  const { local, remote } = stores(config, options.remote);
+  let cachedIn: CheckResult["cachedIn"] = null;
+  reporter.start("lookup-local", "Local cache");
+  const own = await local.get(key);
+  reporter.done("lookup-local", own ? "hit" : "miss");
+  if (own) cachedIn = "local";
+
+  let newest: CheckResult["newest"] = null;
+  let changes: string | null = null;
+  if (!remote) {
+    reporter.skip(
+      "lookup-remote",
+      options.remote && config.remote.enabled ? "gh is not on PATH" : "disabled",
+    );
+  } else {
+    reporter.start("lookup-remote", remote.name);
+    try {
+      const there = await remote.has(key);
+      if (there && !cachedIn) cachedIn = "remote";
+      const meta = await remote.newestMeta(variant.name);
+      if (meta) newest = { key: meta.key, commit: meta.commit, builtAt: meta.builtAt };
+      if (!there) changes = describeChanges(variant.name, meta, fingerprint.sources);
+      reporter.done("lookup-remote", there ? "has this key" : `miss — ${changes}`);
+    } catch (error) {
+      reporter.fail("lookup-remote", describe(error));
+    }
+  }
+  return {
+    key,
+    fingerprint: fingerprint.hash,
+    cachedIn,
+    newest,
+    changes,
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
 /**
  * The env every step sees: the variant's defaults, then its env file, then the caller's
  * environment, then the variant's fixed `env`. In an Expo app `.env*` loading is switched off
@@ -321,19 +407,27 @@ async function explainMiss(
   sources: CacheMeta["sources"],
 ): Promise<string> {
   try {
-    const previous = await remote.newestMeta(variant);
-    if (!previous) return `no shared ${variant} entry yet`;
-    const before = new Map(previous.sources.map((s) => [s.id, s.hash]));
-    const after = new Map(sources.map((s) => [s.id, s.hash]));
-    const moved = [...new Set([...before.keys(), ...after.keys()])].filter(
-      (id) => before.get(id) !== after.get(id),
-    );
-    return moved.length > 0
-      ? `${moved.length} sources changed since ${previous.commit}: ${moved.slice(0, 5).join(", ")}`
-      : `same fingerprint as ${previous.commit}; toolchain, ABI or key extras changed`;
+    return describeChanges(variant, await remote.newestMeta(variant), sources);
   } catch (error) {
     return `could not compare with the newest entry (${describe(error)})`;
   }
+}
+
+/** The fingerprint sources that differ between `previous` and `sources`, as one line. */
+export function describeChanges(
+  variant: string,
+  previous: CacheMeta | null,
+  sources: CacheMeta["sources"],
+): string {
+  if (!previous) return `no shared ${variant} entry yet`;
+  const before = new Map(previous.sources.map((s) => [s.id, s.hash]));
+  const after = new Map(sources.map((s) => [s.id, s.hash]));
+  const moved = [...new Set([...before.keys(), ...after.keys()])].filter(
+    (id) => before.get(id) !== after.get(id),
+  );
+  return moved.length > 0
+    ? `${moved.length} sources changed since ${previous.commit}: ${moved.slice(0, 5).join(", ")}`
+    : `same fingerprint as ${previous.commit}; toolchain, ABI or key extras changed`;
 }
 
 function gitHead(cwd: string): string {

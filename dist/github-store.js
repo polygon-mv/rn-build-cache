@@ -67,6 +67,10 @@ export function createGithubStore(options) {
             }
             return { meta, apkPath };
         },
+        async has(key) {
+            const names = new Set(listAssets()?.map((asset) => asset.name) ?? []);
+            return names.has(`${key}.json`) && names.has(`${key}.apk`);
+        },
         async put(meta, apkPath) {
             if (listAssets() === null) {
                 try {

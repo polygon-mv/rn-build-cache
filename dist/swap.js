@@ -4,7 +4,8 @@
  * Up to three APK entries change per commit, and each one present in the cached APK is rewritten:
  *
  * - `assets/index.android.bundle`: bundled the way the RN Gradle plugin does it (`export:embed` in
- *   an Expo app, `react-native bundle` otherwise, with `--reset-cache --minify false`), compiled
+ *   an Expo app, `react-native bundle` otherwise, with `--minify false` and, unless the variant
+ *   opts out, `--reset-cache`), compiled
  *   with `hermesc -emit-binary -O`, and stored uncompressed as AGP stores it so Hermes can mmap it.
  * - `assets/app.config` (expo-constants): the serialised app config, including `extra`, which the
  *   fingerprint deliberately ignores.
@@ -55,7 +56,9 @@ async function swapIn(options) {
     const bundle = join(stage, BUNDLE);
     reporter.start("bundle", "Bundle JS + compile Hermes bytecode");
     try {
-        const { command, args } = bundleCommand(appDir, toolchain, bundle, resDir, env);
+        const { command, args } = bundleCommand(appDir, toolchain, bundle, resDir, env, {
+            resetCache: options.resetMetroCache ?? true,
+        });
         await run(command, args, { cwd: appDir, env });
         await run(toolchain.hermesc, ["-w", "-emit-binary", "-max-diagnostic-width=80", "-O", "-out", `${bundle}.hbc`, bundle], { cwd: appDir, env });
         await rename(`${bundle}.hbc`, bundle);
@@ -100,13 +103,13 @@ async function swapIn(options) {
     }
     return { ok: true, apkPath: options.outPath };
 }
-function bundleCommand(appDir, toolchain, bundle, resDir, env) {
+function bundleCommand(appDir, toolchain, bundle, resDir, env, metro) {
     const common = [
         "--platform",
         "android",
         "--dev",
         "false",
-        "--reset-cache",
+        ...(metro.resetCache ? ["--reset-cache"] : []),
         "--bundle-output",
         bundle,
         "--assets-dest",

@@ -7,7 +7,7 @@ import { appendFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs, USAGE, wantsInteractive } from "./args.js";
-import { runBuild, type BuildResult } from "./build.js";
+import { runBuild, runCheck, type BuildResult, type CheckResult } from "./build.js";
 import { findConfig, loadConfig, type ResolvedConfig } from "./config.js";
 import { formatDuration, log, run } from "./exec.js";
 import { defaultCacheDir } from "./local-store.js";
@@ -59,6 +59,25 @@ export async function main(argv: readonly string[]): Promise<number> {
   if (!variant) {
     process.stderr.write(`unknown variant "${variantName}" (one of: ${names.join(", ")})\n`);
     return 2;
+  }
+
+  if (options.check) {
+    const checked = await runCheck(
+      config,
+      variant,
+      { remote: options.remote, explain: options.explain },
+      createPlainReporter(),
+    ).catch((error: unknown) => {
+      log(`failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+      return null;
+    });
+    if (!checked) return 1;
+    const line = summarizeCheck(variant.name, checked);
+    writeCheckOutputs(checked);
+    if (process.env.GITHUB_STEP_SUMMARY)
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
+    process.stdout.write(`${line}\n`);
+    return 0;
   }
 
   const cacheDir = config.local.dir ?? defaultCacheDir();
@@ -157,6 +176,34 @@ export function summarize(variant: string, result: BuildResult): string {
       ? ""
       : `, saved ~${formatDuration(result.baselineSeconds * 1000 - result.elapsedMs)} of a ${formatDuration(result.baselineSeconds * 1000)} build`;
   return `rn-build-cache: ${variant} HIT (${result.source}; ${how}) in ${took}${saved}`;
+}
+
+export function summarizeCheck(variant: string, result: CheckResult): string {
+  const took = formatDuration(result.elapsedMs);
+  if (result.cachedIn) {
+    return `rn-build-cache: ${variant} CACHED (${result.cachedIn}) as ${result.key} — checked in ${took}`;
+  }
+  const why = result.changes ? ` (${result.changes})` : "";
+  return `rn-build-cache: ${variant} NOT CACHED — ${result.key} needs a full build${why}; checked in ${took}`;
+}
+
+function writeCheckOutputs(result: CheckResult): void {
+  const file = process.env.GITHUB_OUTPUT;
+  if (!file) return;
+  const values: Record<string, string> = {
+    cached: result.cachedIn ? "true" : "false",
+    key: result.key,
+    fingerprint: result.fingerprint,
+    "newest-key": result.newest?.key ?? "",
+    "newest-commit": result.newest?.commit ?? "",
+    changes: result.changes ?? "",
+  };
+  appendFileSync(
+    file,
+    Object.entries(values)
+      .map(([k, v]) => `${k}=${v.replace(/\r?\n/g, " ")}\n`)
+      .join(""),
+  );
 }
 
 function writeGithubOutputs(result: BuildResult): void {

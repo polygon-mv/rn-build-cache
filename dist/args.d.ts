@@ -14,6 +14,11 @@ export interface CliOptions {
      * without running Gradle, so CI can prepare the runner for a full build only when it needs one.
      */
     readonly cacheOnly: boolean;
+    /**
+     * Only report whether the cache has this variant's key (exit 0 either way): fingerprint and a
+     * listing of the release, no download, no bundling, no Gradle.
+     */
+    readonly check: boolean;
     /** Run every prepare step, including ones whose `unlessExists` output is present. */
     readonly prepare: boolean;
     readonly install: boolean;
@@ -23,7 +28,7 @@ export interface CliOptions {
     /** Force plain output even on a TTY. */
     readonly plain: boolean;
 }
-export declare const USAGE = "Usage: rn-build-cache [--variant <name>] [options]\n\nRun without --variant in a terminal for the interactive UI.\n\n  --variant <name>       a variant from rn-build-cache.config (e.g. dev, staging)\n  --install              adb install -r the result (add --device <serial> with several devices)\n  --out <path>           where to write the APK\n  --no-cache             skip the lookup and build; the result still refreshes the cache\n  --no-remote            use only the local cache, never the GitHub release\n  --upload / --no-upload share a fresh build on the GitHub release (default: on in CI only)\n  --cache-only           build from the cache or do nothing (exit 0, hit=false); never Gradle\n  --prepare              run every prepare step, even ones whose output already exists\n  --config <path>        config file (default: nearest rn-build-cache.config.* upwards)\n  --explain              print what the cache key is made of\n  --plain                no interactive UI, even in a terminal";
+export declare const USAGE = "Usage: rn-build-cache [--variant <name>] [options]\n\nRun without --variant in a terminal for the interactive UI.\n\n  --variant <name>       a variant from rn-build-cache.config (e.g. dev, staging)\n  --install              adb install -r the result (add --device <serial> with several devices)\n  --out <path>           where to write the APK\n  --no-cache             skip the lookup and build; the result still refreshes the cache\n  --no-remote            use only the local cache, never the GitHub release\n  --upload / --no-upload share a fresh build on the GitHub release (default: on in CI only)\n  --cache-only           build from the cache or do nothing (exit 0, hit=false); never Gradle\n  --check                only report whether the cache has this build (exit 0, cached=true|false);\n                         downloads and builds nothing\n  --prepare              run every prepare step, even ones whose output already exists\n  --config <path>        config file (default: nearest rn-build-cache.config.* upwards)\n  --explain              print what the cache key is made of\n  --plain                no interactive UI, even in a terminal";
 export declare function parseArgs(argv: readonly string[], env?: Readonly<Record<string, string | undefined>>): CliOptions | {
     error: string;
 } | {

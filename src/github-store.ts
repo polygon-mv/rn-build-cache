@@ -30,6 +30,8 @@ interface ReleaseAsset {
 }
 
 export interface GithubStore extends CacheStore {
+  /** Whether a complete entry for `key` is on the release; downloads nothing. */
+  has(key: string): Promise<boolean>;
   put(meta: CacheMeta, apkPath: string): Promise<void>;
   prune(keepPerVariant: number): Promise<string[]>;
   newestMeta(variant: string): Promise<CacheMeta | null>;
@@ -88,6 +90,11 @@ export function createGithubStore(options: {
         throw new Error(`${key}.apk does not match its recorded sha256 (download corrupted?)`);
       }
       return { meta, apkPath };
+    },
+
+    async has(key) {
+      const names = new Set(listAssets()?.map((asset) => asset.name) ?? []);
+      return names.has(`${key}.json`) && names.has(`${key}.apk`);
     },
 
     async put(meta, apkPath) {

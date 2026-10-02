@@ -71,6 +71,7 @@ export function resolveConfig(raw, configPath) {
             apkPath: variant.apkPath ??
                 `app/build/outputs/apk/${variant.buildType}/app-${variant.buildType}.apk`,
             prepare: variant.prepare ?? [],
+            resetMetroCache: variant.resetMetroCache ?? true,
             embedsJs: variant.buildType === "release",
         };
     }

@@ -15,6 +15,8 @@ interface ReleaseAsset {
     readonly createdAt: string;
 }
 export interface GithubStore extends CacheStore {
+    /** Whether a complete entry for `key` is on the release; downloads nothing. */
+    has(key: string): Promise<boolean>;
     put(meta: CacheMeta, apkPath: string): Promise<void>;
     prune(keepPerVariant: number): Promise<string[]>;
     newestMeta(variant: string): Promise<CacheMeta | null>;

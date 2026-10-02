@@ -10,6 +10,8 @@ Run without --variant in a terminal for the interactive UI.
   --no-remote            use only the local cache, never the GitHub release
   --upload / --no-upload share a fresh build on the GitHub release (default: on in CI only)
   --cache-only           build from the cache or do nothing (exit 0, hit=false); never Gradle
+  --check                only report whether the cache has this build (exit 0, cached=true|false);
+                         downloads and builds nothing
   --prepare              run every prepare step, even ones whose output already exists
   --config <path>        config file (default: nearest rn-build-cache.config.* upwards)
   --explain              print what the cache key is made of
@@ -21,6 +23,7 @@ export function parseArgs(argv, env = process.env) {
     let remote = true;
     let upload = env.CI === "true";
     let cacheOnly = false;
+    let check = false;
     let prepare = false;
     let install = false;
     let device = null;
@@ -64,6 +67,9 @@ export function parseArgs(argv, env = process.env) {
             case "--cache-only":
                 cacheOnly = true;
                 break;
+            case "--check":
+                check = true;
+                break;
             case "--prepare":
                 prepare = true;
                 break;
@@ -92,6 +98,10 @@ export function parseArgs(argv, env = process.env) {
     }
     if (cacheOnly && !cache)
         return { error: "--cache-only and --no-cache contradict each other" };
+    if (check && !cache)
+        return { error: "--check and --no-cache contradict each other" };
+    if (check && !variant)
+        return { error: "--check needs --variant" };
     return {
         variant,
         config,
@@ -99,6 +109,7 @@ export function parseArgs(argv, env = process.env) {
         remote,
         upload,
         cacheOnly,
+        check,
         prepare,
         install,
         device,

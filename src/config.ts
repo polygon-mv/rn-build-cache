@@ -35,6 +35,13 @@ export interface VariantConfig {
   readonly prepare?: readonly PrepareStep[];
   /** Human label for the interactive picker. */
   readonly description?: string;
+  /**
+   * Pass `--reset-cache` to Metro when a swap bundles JS (default true, as the RN Gradle plugin
+   * does). Set false to reuse Metro's transform cache between swaps, e.g. a CI cache of
+   * `$TMPDIR/metro-cache`: bundling is most of a swap. Metro's cache key does not cover every
+   * env value a Babel plugin inlines, so key such a persisted cache on those values.
+   */
+  readonly resetMetroCache?: boolean;
 }
 
 export interface Config {
@@ -174,6 +181,7 @@ export function resolveConfig(raw: unknown, configPath: string): ResolvedConfig 
         variant.apkPath ??
         `app/build/outputs/apk/${variant.buildType}/app-${variant.buildType}.apk`,
       prepare: variant.prepare ?? [],
+      resetMetroCache: variant.resetMetroCache ?? true,
       embedsJs: variant.buildType === "release",
     };
   }

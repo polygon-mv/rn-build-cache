@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs, wantsInteractive } from "./args.js";
-import { buildEnv } from "./build.js";
-import { summarize } from "./cli.js";
+import { buildEnv, describeChanges } from "./build.js";
+import { summarize, summarizeCheck } from "./cli.js";
 import { resolveConfig, type ResolvedVariant } from "./config.js";
 import { ccacheSummary } from "./gradle-build.js";
 import { compareDotted } from "./swap.js";
@@ -289,6 +289,13 @@ describe("arguments", () => {
     );
     expect(parseArgs(["--variant", "dev", "--bogus"], {})).toHaveProperty("error");
   });
+
+  test("--check needs a variant and the cache", () => {
+    expect(parseArgs(["--variant", "dev", "--check"], {})).toMatchObject({ check: true });
+    expect(parseArgs(["--variant", "dev"], {})).toMatchObject({ check: false });
+    expect(parseArgs(["--check"], {})).toHaveProperty("error");
+    expect(parseArgs(["--variant", "dev", "--check", "--no-cache"], {})).toHaveProperty("error");
+  });
 });
 
 describe("interactive or plain", () => {
@@ -327,6 +334,7 @@ describe("config", () => {
     expect(staging?.gradleTask).toBe(":app:assembleRelease");
     expect(staging?.apkPath).toBe("app/build/outputs/apk/release/app-release.apk");
     expect(staging?.embedsJs).toBe(true);
+    expect(staging?.resetMetroCache).toBe(true);
     expect(config.variants.dev?.embedsJs).toBe(false);
   });
 
@@ -427,5 +435,35 @@ ZY22 unauthorized usb:1-2
       "36.0.0",
       "36.1.0",
     ]);
+  });
+});
+
+describe("check", () => {
+  test("names the fingerprint sources that moved since the newest entry", () => {
+    const previous = meta({
+      sources: [
+        { id: "android", hash: "a" },
+        { id: "expoConfig", hash: "b" },
+      ],
+    });
+    expect(describeChanges("staging", null, [])).toBe("no shared staging entry yet");
+    expect(
+      describeChanges("staging", previous, [
+        { id: "android", hash: "a" },
+        { id: "expoConfig", hash: "c" },
+        { id: "plugins/new.js", hash: "d" },
+      ]),
+    ).toBe("2 sources changed since b6e5bf76: expoConfig, plugins/new.js");
+    expect(describeChanges("staging", previous, previous.sources)).toContain("same fingerprint");
+  });
+
+  test("one line for a cached and an uncached key", () => {
+    const base = { key: "dev-abc", fingerprint: "f", newest: null, elapsedMs: 21_000 };
+    expect(summarizeCheck("dev", { ...base, cachedIn: "remote", changes: null })).toContain(
+      "dev CACHED (remote) as dev-abc",
+    );
+    expect(
+      summarizeCheck("dev", { ...base, cachedIn: null, changes: "1 sources changed since x: y" }),
+    ).toContain("NOT CACHED — dev-abc needs a full build (1 sources changed since x: y)");
   });
 });
