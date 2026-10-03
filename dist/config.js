@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+const BUILD_TYPES = ["debug", "debugOptimized", "release"];
 /** Identity helper for typed configs. */
 export function defineConfig(config) {
     return config;
@@ -55,10 +56,10 @@ export function resolveConfig(raw, configPath) {
         if (!/^[a-z][a-z0-9]*$/.test(name)) {
             fail(`variant name "${name}" must be lowercase letters and digits (it prefixes cache keys)`);
         }
-        if (variant.buildType !== "debug" && variant.buildType !== "release") {
-            fail(`variants.${name}.buildType must be "debug" or "release"`);
+        if (!BUILD_TYPES.includes(variant.buildType)) {
+            fail(`variants.${name}.buildType must be one of ${BUILD_TYPES.map((t) => `"${t}"`).join(", ")}`);
         }
-        const cap = variant.buildType === "debug" ? "Debug" : "Release";
+        const cap = variant.buildType[0].toUpperCase() + variant.buildType.slice(1);
         variants[name] = {
             name,
             buildType: variant.buildType,

@@ -16,9 +16,18 @@ export interface PrepareStep {
   readonly unlessExists?: string;
 }
 
+export type BuildType = "debug" | "debugOptimized" | "release";
+
+const BUILD_TYPES: readonly BuildType[] = ["debug", "debugOptimized", "release"];
+
 export interface VariantConfig {
-  /** Gradle build type. Debug APKs load JS from Metro and are reused verbatim; release embeds it. */
-  readonly buildType: "debug" | "release";
+  /**
+   * Gradle build type. Debug APKs load JS from Metro and are reused verbatim; release embeds it.
+   * `debugOptimized` (React Native 0.81+) is a debug build whose C++ is compiled with
+   * `CMAKE_BUILD_TYPE=Release` and whose libraries fall back to their release variants: it still
+   * loads JS from Metro, but the UI thread runs close to release speed.
+   */
+  readonly buildType: BuildType;
   /** Env set for every step (fingerprint, prebuild, bundling, Gradle), e.g. `{ APP_ENV: "staging" }`. */
   readonly env?: Readonly<Record<string, string>>;
   /** Env used only when neither the environment nor `envFile` sets it. */
@@ -164,10 +173,12 @@ export function resolveConfig(raw: unknown, configPath: string): ResolvedConfig 
     if (!/^[a-z][a-z0-9]*$/.test(name)) {
       fail(`variant name "${name}" must be lowercase letters and digits (it prefixes cache keys)`);
     }
-    if (variant.buildType !== "debug" && variant.buildType !== "release") {
-      fail(`variants.${name}.buildType must be "debug" or "release"`);
+    if (!BUILD_TYPES.includes(variant.buildType)) {
+      fail(
+        `variants.${name}.buildType must be one of ${BUILD_TYPES.map((t) => `"${t}"`).join(", ")}`,
+      );
     }
-    const cap = variant.buildType === "debug" ? "Debug" : "Release";
+    const cap = variant.buildType[0]!.toUpperCase() + variant.buildType.slice(1);
     variants[name] = {
       name,
       buildType: variant.buildType,
