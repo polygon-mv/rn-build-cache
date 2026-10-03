@@ -10,9 +10,15 @@ export interface PrepareStep {
     /** Skip the step when this path (relative to the repo root) exists, unless `--prepare` is passed. */
     readonly unlessExists?: string;
 }
+export type BuildType = "debug" | "debugOptimized" | "release";
 export interface VariantConfig {
-    /** Gradle build type. Debug APKs load JS from Metro and are reused verbatim; release embeds it. */
-    readonly buildType: "debug" | "release";
+    /**
+     * Gradle build type. Debug APKs load JS from Metro and are reused verbatim; release embeds it.
+     * `debugOptimized` (React Native 0.81+) is a debug build whose C++ is compiled with
+     * `CMAKE_BUILD_TYPE=Release` and whose libraries fall back to their release variants: it still
+     * loads JS from Metro, but the UI thread runs close to release speed.
+     */
+    readonly buildType: BuildType;
     /** Env set for every step (fingerprint, prebuild, bundling, Gradle), e.g. `{ APP_ENV: "staging" }`. */
     readonly env?: Readonly<Record<string, string>>;
     /** Env used only when neither the environment nor `envFile` sets it. */

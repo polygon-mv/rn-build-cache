@@ -338,6 +338,17 @@ describe("config", () => {
     expect(config.variants.dev?.embedsJs).toBe(false);
   });
 
+  test("debugOptimized loads JS from Metro like debug, with its own task and APK", () => {
+    const config = resolveConfig(
+      { variants: { dev: { buildType: "debugOptimized" } } },
+      "/repo/rn-build-cache.config.mjs",
+    );
+    const dev = config.variants.dev;
+    expect(dev?.gradleTask).toBe(":app:assembleDebugOptimized");
+    expect(dev?.apkPath).toBe("app/build/outputs/apk/debugOptimized/app-debugOptimized.apk");
+    expect(dev?.embedsJs).toBe(false);
+  });
+
   test("rejects configs it cannot use", () => {
     expect(() => resolveConfig(null, "/c.json")).toThrow(/object/);
     expect(() => resolveConfig({ variants: {} }, "/c.json")).toThrow(/at least one/);

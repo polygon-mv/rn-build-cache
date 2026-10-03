@@ -5,7 +5,9 @@ has not changed. The same command works on a laptop (with an interactive termina
 GitHub Actions (plain logs), and both share one cache stored on a GitHub release.
 
 - **Debug / dev-client builds** with the same native fingerprint are reused as they are, because
-  they load their JS from Metro.
+  they load their JS from Metro. `buildType: "debugOptimized"` (React Native 0.81+) is the same
+  kind of build with release-compiled C++ and release library variants, so a dev client scrolls
+  and animates close to release speed; it is cached and reused exactly like `debug`.
 - **Release builds** with the same native fingerprint get the current commit's JS bundled,
   compiled to Hermes bytecode and swapped into a copy of the cached APK, which is then zipaligned
   and re-signed. That takes minutes.
