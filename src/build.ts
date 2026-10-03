@@ -242,6 +242,7 @@ async function fingerprintVariant(
       const inputs: KeyInputs = {
         fingerprint: fp.hash,
         variant: variant.name,
+        buildType: variant.buildType,
         abi: config.abi,
         hermesCompiler: toolchain.hermesCompiler,
         reactNative: toolchain.reactNative,
