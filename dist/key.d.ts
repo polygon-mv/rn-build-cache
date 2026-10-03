@@ -7,6 +7,8 @@
  *
  * - `variant`: flavors are often switched by env (e.g. `APP_ENV`) rather than Gradle flavors, and
  *   two flavors' configs may differ only in fields the fingerprint happens not to cover.
+ * - `buildType`: a variant moved from `debug` to `debugOptimized` (or `release`) keeps its name and
+ *   often its fingerprint, but its APK is a different binary.
  * - `abi`: an arm64-only APK must never answer for a universal one.
  * - `hermesCompiler`: a swapped bundle is compiled by `hermes-compiler` from node_modules and must
  *   match the bytecode version of the Hermes runtime inside the cached APK.
@@ -17,6 +19,7 @@ export declare const RECIPE_VERSION = 1;
 export interface KeyInputs {
     readonly fingerprint: string;
     readonly variant: string;
+    readonly buildType: string;
     readonly abi: string;
     readonly hermesCompiler: string;
     readonly reactNative: string;

@@ -18,6 +18,7 @@ import { decideSwap, diffAssets, hbcVersion } from "./swap-safety.js";
 const INPUTS: KeyInputs = {
   fingerprint: "33477a809b3844899985b4a7f5b9ce34249b43e6",
   variant: "staging",
+  buildType: "release",
   abi: "arm64-v8a",
   hermesCompiler: "250829098.0.10",
   reactNative: "0.86.3",
@@ -55,6 +56,7 @@ describe("cache key", () => {
     const changes: Partial<KeyInputs>[] = [
       { fingerprint: "0".repeat(40) },
       { variant: "dev" },
+      { buildType: "debugOptimized" },
       { extras: { gradle: "--max-workers=2" } },
       { abi: "x86_64" },
       { hermesCompiler: "250829098.0.11" },

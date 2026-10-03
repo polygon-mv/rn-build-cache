@@ -183,6 +183,7 @@ async function fingerprintVariant(config, variant, explain, reporter) {
         const inputs = {
             fingerprint: fp.hash,
             variant: variant.name,
+            buildType: variant.buildType,
             abi: config.abi,
             hermesCompiler: toolchain.hermesCompiler,
             reactNative: toolchain.reactNative,
