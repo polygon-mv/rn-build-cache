@@ -19,6 +19,12 @@ export interface NativeFingerprint {
  * change the hash on every commit. It is not native: it reaches the app as `assets/app.config`,
  * which the release swap regenerates. Package scripts cannot change the native build.
  *
+ * Native modules and config plugins are hashed by their files, not by package name and version.
+ * `@expo/fingerprint` 0.21 (Expo SDK 58) defaults both to `package` through its `balanced` preset,
+ * so a patch applied to an installed native package, or an edit to a local `file:` module copied
+ * into `node_modules`, would keep the same key and reuse a stale APK. Older versions ignore the
+ * two options and already hash files.
+ *
  * Reads `process.env` through the app config, so the build's env must be set first.
  */
 export declare function nativeFingerprint(appDir: string): Promise<NativeFingerprint>;
