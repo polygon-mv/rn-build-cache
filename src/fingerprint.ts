@@ -24,7 +24,13 @@ interface FingerprintModule {
   SourceSkips: Record<string, number>;
   createFingerprintAsync(
     projectRoot: string,
-    options: { platforms: string[]; sourceSkips: number; silent: boolean },
+    options: {
+      platforms: string[];
+      sourceSkips: number;
+      nativeModuleSourceType: "files";
+      configPluginSourceType: "files";
+      silent: boolean;
+    },
   ): Promise<{
     hash: string;
     sources: Array<{ type: string; filePath?: string; id?: string; hash: string | null }>;
@@ -55,6 +61,12 @@ function loadFingerprint(appDir: string): FingerprintModule {
  * change the hash on every commit. It is not native: it reaches the app as `assets/app.config`,
  * which the release swap regenerates. Package scripts cannot change the native build.
  *
+ * Native modules and config plugins are hashed by their files, not by package name and version.
+ * `@expo/fingerprint` 0.21 (Expo SDK 58) defaults both to `package` through its `balanced` preset,
+ * so a patch applied to an installed native package, or an edit to a local `file:` module copied
+ * into `node_modules`, would keep the same key and reuse a stale APK. Older versions ignore the
+ * two options and already hash files.
+ *
  * Reads `process.env` through the app config, so the build's env must be set first.
  */
 export async function nativeFingerprint(appDir: string): Promise<NativeFingerprint> {
@@ -63,6 +75,8 @@ export async function nativeFingerprint(appDir: string): Promise<NativeFingerpri
   const fp = await fingerprint.createFingerprintAsync(appDir, {
     platforms: ["android"],
     sourceSkips: (skips.ExpoConfigExtraSection ?? 0) | (skips.PackageJsonScriptsAll ?? 0),
+    nativeModuleSourceType: "files",
+    configPluginSourceType: "files",
     silent: true,
   });
   return {
