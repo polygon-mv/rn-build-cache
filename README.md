@@ -168,7 +168,9 @@ Gradle plugin bundles. Set `resetMetroCache: false` on a variant to reuse Metro'
 **Key.** `@expo/fingerprint` hashes the app's native inputs: `android/`, config plugins,
 autolinked modules and the evaluated app config. The tool leaves out two things that change on
 every commit without affecting native code: the config's `extra` section (often a build stamp)
-and `package.json` scripts. The key is a SHA-256 over that fingerprint plus the variant, the ABI,
+and `package.json` scripts. Native modules and config plugins are hashed by their **files**, not
+by package name and version (Expo SDK 58's fingerprint defaults to the latter), so a patched native
+package or an edited local `file:` module moves the key. The key is a SHA-256 over that fingerprint plus the variant, the ABI,
 the `react-native` and `hermes-compiler` versions, a recipe version and your `keyExtras`. The
 fingerprint is taken **before** prebuild, because prebuild rewrites tracked `android/` files and
 the key would otherwise move between lookup and store. In Expo apps `.env*` loading is turned off
